@@ -17,6 +17,7 @@ if(NOT LLVM_ENABLE_RTTI)
 endif()
 
 add_executable(generate_ilp_from_bb generate_ilp_from_bb.cpp)
+add_executable(opcode_from_object_file opcode_from_object_file.cpp)
 
 llvm_map_components_to_libnames(
   llvm_libs
@@ -31,5 +32,6 @@ llvm_map_components_to_libnames(
 )
 
 target_link_libraries(generate_ilp_from_bb ${llvm_libs})
+target_link_libraries(opcode_from_object_file ${llvm_libs})
 
-install(TARGETS generate_ilp_from_bb DESTINATION bin)
+install(TARGETS generate_ilp_from_bb opcode_from_object_file DESTINATION bin)
