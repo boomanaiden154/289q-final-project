@@ -18,7 +18,17 @@ endif()
 
 add_executable(generate_ilp_from_bb generate_ilp_from_bb.cpp)
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
+llvm_map_components_to_libnames(
+  llvm_libs
+  support
+  core
+  irreader
+  X86AsmParser
+  X86CodeGen
+  X86Desc
+  X86Disassembler
+  X86Info
+)
 
 target_link_libraries(generate_ilp_from_bb ${llvm_libs})
 

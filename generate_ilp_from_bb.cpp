@@ -1,7 +1,14 @@
+#include "llvm-c/Target.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
 
@@ -48,10 +55,67 @@ Expected<std::vector<uint8_t>> ParseHexString(std::string_view hex_string) {
   return res;
 }
 
+Expected<std::vector<MCInst>>
+disassembleInstructions(ArrayRef<uint8_t> MachineCode,
+                        std::unique_ptr<MCDisassembler> &LLVMMCDisassembler) {
+  std::vector<MCInst> DisassembledInstructions;
+  while (!MachineCode.empty()) {
+    MCInst CurrentInstruction;
+    uint64_t InstructionSize;
+    const uint64_t InstructionAddress =
+        reinterpret_cast<uint64_t>(MachineCode.data());
+    std::string DisassemblerOutputBuffer;
+    llvm::raw_string_ostream Output(DisassemblerOutputBuffer);
+
+    const MCDisassembler::DecodeStatus Status =
+        LLVMMCDisassembler->getInstruction(CurrentInstruction, InstructionSize,
+                                           MachineCode, InstructionAddress,
+                                           Output);
+
+    if (Status != MCDisassembler::DecodeStatus::Success)
+      return make_error<StringError>(llvm::errc::invalid_argument,
+                                     "Failed to disassemble code");
+
+    MachineCode = MachineCode.drop_front(InstructionSize);
+  }
+  return DisassembledInstructions;
+}
+
 static ExitOnError ExitOnErr("generate_ilp_from_bbs error: ");
 
 int main() {
   std::vector<uint8_t> HexValues =
       ExitOnErr(ParseHexString("4889de4889c24c89ff"));
+
+  LLVMInitializeX86Target();
+  LLVMInitializeX86TargetInfo();
+  LLVMInitializeX86TargetMC();
+  LLVMInitializeX86AsmPrinter();
+  LLVMInitializeX86Disassembler();
+  LLVMInitializeX86AsmParser();
+
+  std::string LookupError;
+  const llvm::Target *const LLVMTarget =
+      llvm::TargetRegistry::lookupTarget("x86_64", LookupError);
+
+  if (LLVMTarget == nullptr)
+    ExitOnErr(llvm::make_error<StringError>(llvm::errc::invalid_argument,
+                                            "Bad triple"));
+
+  TargetOptions LLVMTargetOptions;
+  std::unique_ptr<TargetMachine> LLVMTargetMachine(
+      LLVMTarget->createTargetMachine("x86_64", "", "", LLVMTargetOptions,
+                                      std::nullopt));
+  std::unique_ptr<MCContext> LLVMMCContext = std::make_unique<MCContext>(
+      LLVMTargetMachine->getTargetTriple(), LLVMTargetMachine->getMCAsmInfo(),
+      LLVMTargetMachine->getMCRegisterInfo(),
+      LLVMTargetMachine->getMCSubtargetInfo());
+  std::unique_ptr<MCDisassembler> LLVMMCDisassembler(
+      LLVMTarget->createMCDisassembler(*LLVMTargetMachine->getMCSubtargetInfo(),
+                                       *LLVMMCContext));
+
+  std::vector<MCInst> Instructions =
+      ExitOnErr(disassembleInstructions(HexValues, LLVMMCDisassembler));
+
   dbgs() << "Hello World\n";
 }
