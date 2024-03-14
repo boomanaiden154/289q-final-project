@@ -11,13 +11,13 @@ def instructionNodeToAssembly(instrNode):
       'HRESET', 'ICACHE_PREFETCH', 'KEYLOCKER', 'KEYLOCKER_WIDE', 'MSRLIST',
       'RAO_INT', 'SERIALIZE', 'SNP', 'TDX', 'TSX_LDTRK', 'UINTR', 'WRMSRNS'
   ]:
-    return []
+    return None
   if any(x in instrNode.attrib['isa-set'] for x in ['FP16']):
-    return []
+    return None
 
   # Deprecated instruction set extensions
   if instrNode.attrib['extension'] in ['MPX']:
-    return []
+    return None
 
   asm = '.intel_syntax noprefix\n' + instrNode.attrib['asm']
   first = True

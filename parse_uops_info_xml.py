@@ -32,7 +32,7 @@ def getOpcodeFromAssembly(assembly):
     as_output = subprocess.run(as_command_vector, cwd=temp_dir)
     if as_output.returncode != 0:
       logging.error('Failed to disassemble opcode')
-      sys.exit(1)
+      return None
     output_path = os.path.join(temp_dir, 'a.out')
     get_opcode_command_vector = ['opcode_from_object_file', output_path]
     opcode_output = subprocess.run(
@@ -41,19 +41,28 @@ def getOpcodeFromAssembly(assembly):
         stderr=subprocess.PIPE)
     if opcode_output.returncode != 0:
       logging.error('Failed to get opcode from object file')
-      sys.exit(1)
+      return None
     return int(opcode_output.stderr.decode('utf-8'))
 
 
 def main(_):
   tree = ET.parse(FLAGS.input_path)
   logging.info('Finished loading instructions XML file.')
+  opcode_map = {}
   for child in tree.getroot():
     for instruction_tag in child:
       assembly = xed_xml_utils.instructionNodeToAssembly(instruction_tag)
-      print(getOpcodeFromAssembly(assembly))
-      break
-    break
+      if assembly is None:
+        continue
+      current_opcode = getOpcodeFromAssembly(assembly)
+      if current_opcode is None:
+        continue
+      if current_opcode in opcode_map:
+        logging.info('Have already seen this opcode')
+        logging.info(assembly)
+      opcode_map[current_opcode] = True
+      if len(opcode_map) % 100 == 0:
+        logging.info(f'Just did 100 opcodes: {len(opcode_map)}')
 
 
 if __name__ == '__main__':
