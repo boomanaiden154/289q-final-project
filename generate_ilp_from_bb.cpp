@@ -12,7 +12,6 @@
 
 using namespace llvm;
 
-// TODO(boomanaiden154): Add facilities to parse basic blocks from hex values
 // TODO(boomanaiden154): Add facilities for loading uops.info information.
 // TODO(boomanaiden154): Add facilities for setting up ILP constraints.
 
