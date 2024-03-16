@@ -31,8 +31,8 @@ def run_uica(hex_code, temp_dir):
   uica_output = subprocess.run(
       uica_command_vector, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   if uica_output.returncode != 0:
-    print(hex_code)
-  assert (uica_output.returncode == 0)
+    return False
+  return True
 
 
 def get_optimal(hex_code, temp_dir):
@@ -73,7 +73,9 @@ def get_uica_value(hex_code, temp_dir):
 @ray.remote(num_cpus=1)
 def get_optimal_uica_pair(hex_code):
   with tempfile.TemporaryDirectory() as temp_dir:
-    run_uica(hex_code, temp_dir)
+    uica_output = run_uica(hex_code, temp_dir)
+    if uica_output == False:
+      return []
     optimal_value, solver_status = get_optimal(hex_code, temp_dir)
     if optimal_value == 0:
       logging.info('skipping optimal value of zero')
