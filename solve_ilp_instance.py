@@ -12,8 +12,11 @@ from absl import app
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('input_file', None, 'The input JSON file containing uops')
+flags.DEFINE_string('output_file', None,
+                    'The output JSON file containing the schedule')
 
 flags.mark_flag_as_required('input_file')
+flags.mark_flag_as_required('output_file')
 
 
 def main(_):
@@ -36,7 +39,7 @@ def main(_):
     uop['start_cycle'] = uop_start
 
     # Set up the maximum constraint
-    model.addConstr(uop_start <= max_cycle)
+    model.addConstr(uop_start + uop['latency'] <= max_cycle)
 
     # Set up the port constraints
     possible_ports = [
@@ -86,6 +89,8 @@ def main(_):
 
   model.optimize()
 
+  print(f'Solution takes {int(model.getObjective().getValue())} cycles')
+
   for uop in uops:
     assigned_port = -1
     for port_var in uop['port_variables']:
@@ -98,6 +103,18 @@ def main(_):
     print(
         f'{index} Starting at cycle {uop["start_cycle"].X} on port {uop["assigned_port"]}'
     )
+
+  scheduled_uops = []
+  for uop in uops:
+    scheduled_uop = {
+        'port': uop['assigned_port'],
+        'latency': uop['latency'],
+        'start_cycle': int(uop['start_cycle'].X)
+    }
+    scheduled_uops.append(scheduled_uop)
+
+  with open(FLAGS.output_file, 'w') as output_file_handle:
+    json.dump(scheduled_uops, output_file_handle, indent=2)
 
 
 if __name__ == '__main__':
