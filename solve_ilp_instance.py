@@ -116,6 +116,8 @@ def main(_):
   with open(FLAGS.output_file, 'w') as output_file_handle:
     json.dump(scheduled_uops, output_file_handle, indent=2)
 
+  print(int(model.getObjective().getValue()))
+
 
 if __name__ == '__main__':
   app.run(main)
