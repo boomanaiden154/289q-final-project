@@ -87,6 +87,8 @@ def main(_):
 
   model.setObjective(max_cycle, gurobipy.GRB.MINIMIZE)
 
+  model.setParam('TimeLimit', 300)
+
   model.optimize()
 
   print(f'Solution takes {int(model.getObjective().getValue())} cycles')
@@ -116,6 +118,7 @@ def main(_):
   with open(FLAGS.output_file, 'w') as output_file_handle:
     json.dump(scheduled_uops, output_file_handle, indent=2)
 
+  print(model.getAttr('STATUS'))
   print(int(model.getObjective().getValue()))
 
 
