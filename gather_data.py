@@ -13,8 +13,10 @@ from absl import flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('input_file', None, 'The input CSV file.')
+flags.DEFINE_string('output_file', None, 'The output CSV file.')
 
 flags.mark_flag_as_required('input_file')
+flags.mark_flag_as_required('output_file')
 
 
 def run_uica(hex_code, temp_dir):
@@ -67,17 +69,23 @@ def get_uica_value(hex_code, temp_dir):
 
 def main(_):
   value_pairs = []
-  with open(FLAGS.input_file) as input_file_handle:
-    # Read the first line here and discard the value to get past the CSV header.
-    input_file_handle.readline()
-    for input_line in input_file_handle:
-      hex_code = input_line.split(',')[0]
-      with tempfile.TemporaryDirectory() as temp_dir:
-        run_uica(hex_code, temp_dir)
-        optimal_value = get_optimal(hex_code, temp_dir)
-        uica_value = get_uica_value(hex_code, temp_dir)
-        value_pairs.append((uica_value, optimal_value))
-      print('just finished a BB')
+  with open(FLAGS.output_file, 'w') as output_file_handle:
+    output_file_handle.write(f'uica,optimal\n')
+    with open(FLAGS.input_file) as input_file_handle:
+      # Read the first line here and discard the value to get past the CSV header.
+      input_file_handle.readline()
+      for input_line in input_file_handle:
+        hex_code = input_line.split(',')[0]
+        with tempfile.TemporaryDirectory() as temp_dir:
+          run_uica(hex_code, temp_dir)
+          optimal_value = get_optimal(hex_code, temp_dir)
+          if optimal_value == 0:
+            print('skipping optimal value of zero')
+            continue
+          uica_value = get_uica_value(hex_code, temp_dir)
+          value_pairs.append((uica_value, optimal_value))
+          output_file_handle.write(f'{uica_value},{optimal_value}\n')
+        print('just finished a BB')
 
 
 if __name__ == '__main__':

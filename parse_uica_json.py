@@ -31,7 +31,10 @@ def main(_):
         if cycle_info['dispatched'][dispatched_port]['rnd'] == 0:
           dispatched_cycle.append(cycle_info['cycle'])
   last_cycle = max(executed_cycle)
-  first_cycle = min(dispatched_cycle)
+  if len(dispatched_cycle) != 0:
+    first_cycle = min(dispatched_cycle)
+  else:
+    first_cycle = min(executed_cycle)
   print(last_cycle - first_cycle)
 
 
