@@ -68,9 +68,8 @@
 \usepackage{todonotes}
 
 %% These commands are for a PROCEEDINGS abstract or paper.
-\acmConference[Conference acronym 'XX]{Make sure to enter the correct
-  conference title from your rights confirmation emai}{June 03--05,
-  2018}{Woodstock, NY}
+\acmConference[EEC289Q]{Make sure to enter the correct
+  conference title from your rights confirmation emai}{March 20, 2024}{Davis, CA}
 %
 %  Uncomment \acmBooktitle if th title of the proceedings is different
 %  from ``Proceedings of ...''!
@@ -139,7 +138,6 @@
 %% other information printed in the page headers. This command allows
 %% the author to define a more concise list
 %% of authors' names for this purpose.
-\renewcommand{\shortauthors}{Trovato and Tobin, et al.}
 
 %%
 %% The abstract is a short summary of the work to be presented in the
@@ -177,6 +175,29 @@ specifically and to other portions of the full CPU pipeline.
 
 \section{Introduction}
 
+\begin{table*}[t]
+\begin{tabular}{|c|c|c|c|}
+\hline
+Tool & Target & MAPE & Tau \\
+\hline
+\hline
+uiCA \cite{abel2022uica} & Inverse throughput & 1.91\% & 0.9612 \\
+\hline
+OSACA \cite{laukemann2018osaca} & Inverse throughput (roofline) & 36.85\% & 0.5311 \\
+\hline
+llvm-mca \cite{dibiagio2018mca} & Inverse throughput & 22.67\% & 0.8069 \\
+\hline
+GRANITE \cite{sykora2022granite} & Inverse throughput & 6.67\% & Not Available \\
+\hline
+Ithemal \cite{mendis2019ithemal} & Inverse throughput & 8.34\% & Not Available \\
+\hline
+\end{tabular}
+\caption{A comparison of the various cost modeling tools based on the BHive data set. In this case, MAPE refers to mean
+average percent error between the predicted value and the ground truth value. Tau refers to Kendall's tau, which describes
+how well the tool ordered all entries relative to each other, with 1.0 being a perfect ordering. These results are
+specifically on the sandy bridge microarchitecture.}
+\end{table*}
+
 While GPUs been been a recent focus due to the recent AI/ML rush, CPUs are still the backbone of most
 modern computing. Understanding how modern workloads are impacted by the microarchitectural details of
 modern CPUs is becoming increasinbly important to improve performance \cite{moseley2015warehouseprofiling}.
@@ -200,9 +221,16 @@ but they can be incredibly useful in showing how good the heuristics in a produc
 optimal solution, which can help guide efforts and what should be improved by showing what areas could potentially
 benefit from better heuristics, and also quantify on an absolute scale how good a system is.
 
-\section{Background}
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\linewidth]{uica_trace.png}
+  \caption{The schedule for this basic block as reported by uiCA, with the total time taking for uop execution (from the first
+  dispatch to the last execution) being 12 cycles. The orange D blocks indicate the cycle a uop is dispatched to an execution
+  port and the yellow E blocks represent the cycle a uop finishes executing.}
+  \label{figure:uica-trace}
+\end{figure*}
 
-\todo{CPU mircoarchitectural details related to uop stuff}
+\section{Background}
 
 Modern superscalar CPUs decode instructions into one or more micro-operations (uops) that can be executed
 independently, assuming that their dependencies are available. The uop scheduling is handled by the renamer,
@@ -240,6 +268,15 @@ of the CPU pipeline matters a lot, having accurate data is also a significant co
 that custom benchmarking tools using specialized techniques like kernel-mode benchmarking have been purpose-built to
 solve this problem \cite{abel2020nanobench}.
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\linewidth]{optimal_schedule.png}
+  \caption{The optimal schedule for the block shown in the uiCA trace in figure \ref{figure:uica-trace}. In this case,
+  the ILP solver found an optimal solution for the scheduling problem with a total time of ten cycles, two less than
+  the actual schedule.}
+  \label{figure:optimal-schedule}
+\end{figure*}
+
 These projects most often attempt to the model the throughput of an individual \textit{basic block}, or a
 control-flow free sequence of instructions. This means that more complex conditions like branches don't need
 to be modeled, while still allowing beyond-basic block information to be obtained by aggregating information
@@ -274,10 +311,15 @@ uiCA is aimed at finding the throughput of an individual basic block executed in
 specific details about conditions within the CPU microarchitecture during the execution of each iteration are
 available in a JSON format. To get only the time used for uop execution (within a single iteration), we
 take the cycle of when the last uop in the iteration finishes executing, and the cycle when the first uop in
-the iteration is dispatched, and then find the difference to get the time of uop execution. This is not a perfect
+the iteration is dispatched, and then find the difference to get the time of uop execution. An execution trace
+from uiCA exemplifying this is shown in figure \ref{figure:uica-trace}. This is not a perfect
 strategy as it doesn't take into account other conditions like instruction decode, but works reasonably enough.
 
-\todo{uiCA trace showing the dispatch/executed cycles.}
+uiCA, being a static cost model, also is not a perfect representation of the CPU pipeline. However, from testing,
+uiCA is quite accurate, on average obtaining results within 1-2\% of ground truth values, meaning it is reasonably
+accurate in practice at scale. It was also extensively validated during development against ground truth data
+obtained using highly accurate kernel-mode microbenchmarks to reverse engineer the underlying microarchitecture, so
+while it is not a perfect model, it is accurate enough for the purposes of this study.
 
 \subsection{Obtaining Optimal Performance Results}
 
@@ -286,12 +328,21 @@ exposing the uop decomposition of each instruction and the dependencies between 
 we modified uiCA to emit a JSON file containing all of the uops for a specific basic block and all the register
 dependencies between them. This ignores flag dependencies, but this does not impact many basic blocks. After
 running uiCA on an individual basic block with our modifications, we are able to use the JSON output in another
-tool that sets up and solves an ILP instance as described in \label{sec:ilp-formulation}. Once the ILP instance
-is solved, we are able to report the objective, which is the cycle the last uop finishes executing.
-
-\todo{Figure showing the optimal schedule for the uiCA trace above.}
+tool that sets up and solves an ILP instance as described in section \ref{sec:ilp-formulation}. Once the ILP instance
+is solved, we are able to report the objective, which is the cycle the last uop finishes executing. The optimal solution
+for the uiCA trace shown in figure \ref{figure:uica-trace} is shown in figure \ref{figure:optimal-schedule}.
 
 \subsection{Data Collection}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.6\linewidth]{confusion_matrix.png}
+  \caption{A confusion matrix comparing the results obtained from uiCA with the results obtained from the ILP
+  instances. The x-axis is the number of cycles that uiCA used while the y-axis is the number of cycles that
+  our ILP formulation found. The number in each block is colored according to a gradient scale, with each
+  number begin the number of times that cycle pair was recoreded.}
+  \label{figure:confusion-matrix}
+\end{figure*}
 
 For obtaining data, we use a subset of the BHive \cite{chen2019bhive} dataset of basic blocks that was modified as
 a part of analysis on uiCA \cite{abel2022uica} to improve its accuracey and to remove blocks that didn't match
@@ -331,6 +382,7 @@ constrants \cite{ying2009multicoreilp}. To this end, we define the following var
     \item $\ell(i)$ - The latency of uop $i$. This will always be an integer as it is an input to the model.
     \item $d_{ii'j}$ - If tasks $i$ and $i'$ are assigned to the same execution port $j$ and $i$ starts execution before $i'$, this binary variable is one, and it is zero otherwise (or not created in the model at all).
     \item $p_{ij}$ - This binary variable is set to one if uop $i$ is executing on port $j$, and it is zero otherwise.
+    \item $m$ - An unconstrainted variable.
     \item $P$ - The set of ports that the microarchitecture has.
     \item $U$ - The set of uops in the basic block.
     \item $M$ - An arbitarily large value used for implementing M constraints.
@@ -340,6 +392,7 @@ Using these variables, we define the following constraints:
 
 \begin{enumerate}
     \item For every dependency edge where uop $i$ depends on uop $i'$: $x_i>x_{i'}+\ell(i')$.
+    \item $$\forall i \in U : x_i + \ell(i) < m$$
     \item $$\forall i \in U : \sum^{j \in P} p_{ij}=1$$
     \item For every port $j$ that uop $i$ cannot execute on: $p_{ij}=0$
     \item For every pair of uops ($i$ and $i'$) that are both assigned to the same port $j$ (i.e., $p_{ij}=p{i'j}=1$,
@@ -347,11 +400,17 @@ Using these variables, we define the following constraints:
     $$x_{i'}+\ell(i')\leq x_{i}+d_{ii'j}M$$
 \end{enumerate}
 
+For the optimization objective, we do the following:
+
+$$\min{m}$$
+
 The first three constraints are able to be expressed as classical ILP constraints. The last constraint is expressed
 as an indicator constraint as it only needs to apply when both uops are assigned to the same port. This is easily done
 within Gurobi, which is then able to use branch and bound techniques to solve the now non-convex ILP instance. This constraint
 uses a so-called Big M constraint and an additional variable ($d_{ii'j}$) to express the idea that only one of the constraints
 has to hold. In this case, it means that the uops can be scheduled on either side of each other, but still can't conflict.
+The $m$ variable is essentially the maximum variable. We optimize over this variable so that we can minimize the last cycle
+of the last uop, which would not be possible without an additional variable.
 
 For several of these constraints, we also only enumerate a small number of them to try and reduce the complexity of the ILP
 instance. For example for the second constraint, for every uop $i$, we only need to create a binary port assignment variable,
@@ -373,8 +432,11 @@ modeling criteria, we saw an average improvement over the baseline with the opti
 the optimal solution performed worse than the baseline solution due to a lack of modeling certain optimizations that
 uiCA does model.
 
-\todo{Confusion matrix/heat map showing improvements versus size or something.}
-\todo{Discussion on confusion matrix data.}
+The results are easily summarized in the confusion matrix shown in figure \ref{figure:confusion-matrix}. We can see that
+there are some common instances where the ILP solver does end up getting a value worse than the baseline due to the
+previously mentioned issues. However, we see the solver most of the time either matching the baseline number of finding
+values that are somewhat less than the baseline values. This is consistent with the rest of the results, and the idea
+that there is a some headroom attainable from this optimization.
 
 \section{Limitations}
 
@@ -391,6 +453,11 @@ modeling dependencies between flag registers. While many basic blocks do not hav
 of flag registers (e.e.g, those with just integer arithmetic and/or register move operations), but many will, like those
 containing the \texttt{cmov} instruction, which needs the flag values from a previous instruction to decide whether
 or not to move a value.
+
+In addition, there are other edge cases that we are not currently considering, like the use of mixed-width registers
+in the same block. For example, within this work, we only consider registers to be dependencies of each other if they
+have the same name (which implies the same width), which is not the case in reality, with quite a few nuances. This
+probably impacts a reasonable number of basic blocks, but properly fixing this issue is left to other work.
 
 While there are several limitations of our work that bias our results both lower and higher, it is difficult to say how much
 each contributes. They might even out, or one aspect might significantly outweigh the rest. Analyzing the impacts of these
